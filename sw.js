@@ -1,5 +1,5 @@
 // Minimal service worker: makes the app installable and lets it open offline.
-const CACHE = 'smoker-v2';
+const CACHE = 'smoker-v4';
 const FILES = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-192.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', e => {

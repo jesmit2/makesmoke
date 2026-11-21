@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2B7FE0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Smitty's">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Smoker Monitor</title>
+<style>
+:root{
+  --bg:#F2F7FC;--card:#FFFFFF;--ink:#0E1B2C;--mute:#5B6B80;--line:#D6E2F0;
+  --active:#2B7FE0;--primary:#3C82DC;--danger:#D64545;--warn:#E8A33A;--ok:#2FB36B;
+  --m1:#E8833A;--m2:#2FB36B;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0B1420;--card:#13202F;--ink:#F1F6FC;--mute:#8FA3BA;--line:#223348}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{min-height:100vh;padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:calc(10px + env(safe-area-inset-top)) 14px 10px;background:var(--card);border-bottom:1px solid var(--line)}
+h1{font-size:18px;margin:0;letter-spacing:.2px}
+.conn{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--mute)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--mute)}
+.dot.connected{background:var(--ok)}.dot.reconnecting,.dot.connecting{background:var(--warn);animation:pulse 1s infinite}
+.dot.demo{background:var(--active)}
+@keyframes pulse{50%{opacity:.35}}
+button{font:inherit;cursor:pointer;border:0;border-radius:12px;padding:12px 16px;font-weight:600;background:var(--primary);color:#fff;min-height:44px}
+button.ghost{background:transparent;color:var(--active);border:1.5px solid var(--active)}
+button.small{padding:8px 12px;min-height:36px;font-size:14px}
+button:active{filter:brightness(.92)}
+main{max-width:640px;margin:0 auto;padding:14px}
+.screen{display:none}.screen.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.label{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--mute);font-weight:600}
+.banner{display:none;margin:0 0 12px;padding:12px 14px;border-radius:14px;font-weight:600}
+.banner.show{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.banner.alarm{background:var(--danger);color:#fff;animation:flash 1s infinite}
+.banner.info{background:var(--warn);color:#1a1200}
+@keyframes flash{50%{filter:brightness(1.25)}}
+.gauge{position:relative;text-align:center}
+.gauge svg{width:100%;max-width:340px}
+.gauge .big{position:absolute;left:0;right:0;top:46%;font-size:56px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.gauge .sub{position:absolute;left:0;right:0;top:76%;color:var(--mute);font-size:14px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.probe .val{font-size:38px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:6px}
+.probe .tgt{font-size:13px;color:var(--mute)}
+.probe.err .val{color:var(--danger);font-size:26px}
+.probe.hit{border-color:var(--ok);box-shadow:0 0 0 2px var(--ok) inset}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--mute);margin-top:8px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+canvas{width:100%;height:220px;display:block}
+label.f{display:block;margin-bottom:14px;font-weight:600}
+label.f span{display:block;font-size:13px;color:var(--mute);margin-bottom:6px;font-weight:600}
+input[type=number],select{width:100%;font:inherit;font-size:20px;padding:12px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+input[type=number]:focus,select:focus{outline:2px solid var(--active);border-color:var(--active)}
+.seg{display:flex;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{flex:1;background:transparent;color:var(--mute);border-radius:0}
+.seg button.on{background:var(--active);color:#fff}
+input[type=range]{width:100%;height:44px;accent-color:var(--active)}
+.fanval{font-size:64px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:10}
+nav button{flex:1;background:transparent;color:var(--mute);border-radius:0;min-height:60px;font-size:13px}
+nav button.on{color:var(--active)}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30;max-width:90%}
+.toast.show{opacity:1}
+.note{font-size:13px;color:var(--mute);line-height:1.45}
+.sp{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:8px 0 4px}
+.sp button{width:44px;height:44px;padding:0;font-size:26px;line-height:1;border-radius:50%}
+.spv{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums}
+.fanbig{font-size:38px;font-weight:700;font-variant-numeric:tabular-nums;margin:6px 0 8px}
+.bar{height:10px;border-radius:6px;background:var(--line);overflow:hidden;margin-bottom:6px}
+.bar i{display:block;height:100%;width:0;background:var(--active);border-radius:6px;transition:width .4s}
+button:disabled{opacity:.45;cursor:default}
+input[type=text],input[type=password]{width:100%;font:inherit;font-size:18px;padding:12px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+input[type=text]:focus,input[type=password]:focus{outline:2px solid var(--active);border-color:var(--active)}
+.wstat{font-size:22px;font-weight:700;margin-top:6px}
+.wstat.ok{color:var(--ok)}.wstat.bad{color:var(--danger)}.wstat.warn{color:var(--warn)}
+.wsub{font-size:13px;color:var(--mute);margin-top:4px;word-break:break-all}
+.wlist{display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:260px;overflow:auto}
+.wnet{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;background:var(--bg);color:var(--ink);border:1.5px solid var(--line);font-weight:600}
+.wnet.on{border-color:var(--active);box-shadow:0 0 0 1px var(--active) inset}
+.wnet .wn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wnet .wm{color:var(--mute);font-size:13px;white-space:nowrap}
+.btnlink{display:block;text-align:center;text-decoration:none;background:var(--primary);color:#fff;border-radius:12px;padding:12px 16px;font-weight:600}
+.chk{display:flex;align-items:center;gap:8px;margin:-4px 0 14px;font-size:14px;color:var(--mute)}
+.chk input{width:20px;height:20px;accent-color:var(--active)}
+.hint{display:none}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Smoker Monitor</h1>
+  <div class="conn"><span class="dot" id="dot"></span><span id="connText">Disconnected</span></div>
+  <button id="connBtn" class="small">Connect</button>
+</header>
+
+<main>
+  <div id="banner" class="banner"></div>
+
+  <!-- DASHBOARD -->
+  <section class="screen on" id="s-dash">
+    <div class="card gauge">
+      <div class="label" style="text-align:left">Pit temperature</div>
+      <svg viewBox="0 0 200 125" aria-hidden="true">
+        <path d="M 20 105 A 80 80 0 0 1 180 105" fill="none" stroke="var(--line)" stroke-width="14" stroke-linecap="round"/>
+        <path id="arc" d="M 20 105 A 80 80 0 0 1 180 105" fill="none" stroke="var(--active)" stroke-width="14" stroke-linecap="round" pathLength="100" stroke-dasharray="0 100"/>
+        <line id="tick" x1="0" y1="0" x2="0" y2="0" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round" opacity="0"/>
+      </svg>
+      <div class="big" id="pitBig">--</div>
+      <div class="sub" id="pitSub">Target --</div>
+    </div>
+
+    <div class="row">
+      <div class="card">
+        <div class="label">Pit setpoint</div>
+        <div class="sp">
+          <button id="spDn" aria-label="Lower setpoint">−</button>
+          <div class="spv" id="spV">--</div>
+          <button id="spUp" aria-label="Raise setpoint">+</button>
+        </div>
+        <div class="tgt" id="spHint" style="font-size:13px;color:var(--mute)">Tap − / + to adjust</div>
+      </div>
+      <div class="card">
+        <div class="label">Fan</div>
+        <div class="fanbig"><span id="fanDash">0</span><span id="fanPct">%</span></div>
+        <div class="bar"><i id="fanBar"></i></div>
+        <div id="fanMode" style="font-size:13px;color:var(--mute)">Auto</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="card probe" id="m1card"><div class="label">Meat 1</div><div class="val" id="m1v">--</div><div class="tgt" id="m1t">Target --</div></div>
+      <div class="card probe" id="m2card"><div class="label">Meat 2</div><div class="val" id="m2v">--</div><div class="tgt" id="m2t">Target --</div></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="label">Session</div>
+        <button class="ghost small" id="resetBtn">New session</button>
+      </div>
+      <canvas id="chart"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--active)"></i>Pit</span>
+        <span><i style="background:var(--m1)"></i>Meat 1</span>
+        <span><i style="background:var(--m2)"></i>Meat 2</span>
+        <span id="elapsed" style="margin-left:auto">0:00:00</span>
+      </div>
+    </div>
+    <p class="note" id="status">Not connected. Tap Connect, or try Demo to preview the app.</p>
+    <button class="ghost small" id="demoBtn">Demo mode</button>
+    <button class="ghost small" id="allBtn">Show all devices</button>
+  </section>
+
+  <!-- TARGETS -->
+  <section class="screen" id="s-targets">
+    <div class="card">
+      <div class="label" style="margin-bottom:10px">Units</div>
+      <div class="seg" id="unitSeg"><button data-u="F" class="on">°F</button><button data-u="C">°C</button></div>
+    </div>
+    <div class="card">
+      <label class="f"><span>Pit target</span><input type="number" id="tPit" inputmode="decimal" placeholder="225"></label>
+      <label class="f"><span>Meat 1 target</span><input type="number" id="tM1" inputmode="decimal" placeholder="203"></label>
+      <label class="f"><span>Meat 2 target</span><input type="number" id="tM2" inputmode="decimal" placeholder="203"></label>
+      <label class="f"><span>Pit alert band (± degrees)</span><input type="number" id="band" inputmode="decimal" value="25"></label>
+      <label class="f"><span>Buzzer alert pattern</span>
+        <select id="pattern"><option value="pulse">Pulse</option><option value="continuous">Continuous</option><option value="double">Double-Beep</option></select>
+      </label>
+      <div class="row">
+        <button id="applyBtn">Apply to smoker</button>
+        <button id="testBtn" class="ghost">Test alert</button>
+      </div>
+      <p class="note" style="margin-top:12px">Meat alerts fire when a probe reaches its target. Pit alerts fire when the pit drifts outside the band after first reaching target. Only the pit setpoint is sent to the smoker; meat targets and alert patterns run in this app.</p>
+    </div>
+  </section>
+
+  <!-- FAN -->
+  <section class="screen" id="s-fan">
+    <div class="card">
+      <div class="label" style="margin-bottom:10px">Fan mode</div>
+      <div class="seg" id="modeSeg"><button data-m="auto" class="on">Auto</button><button data-m="manual">Manual</button></div>
+    </div>
+    <div class="card">
+      <div class="label">Fan duty</div>
+      <div class="fanval"><span id="fanV">0</span>%</div>
+      <input type="range" id="fan" min="0" max="100" step="1" value="0" disabled>
+      <div class="legend"><span id="fanNote">Switch to Manual to set the fan yourself.</span></div>
+    </div>
+    <div class="card">
+      <div class="label" style="margin-bottom:10px">Alarm</div>
+      <button id="silenceBtn" style="width:100%">Silence alarm</button>
+    </div>
+  </section>
+
+  <!-- WIFI -->
+  <section class="screen" id="s-wifi">
+    <div class="card">
+      <div class="label">Smoker WiFi</div>
+      <div class="wstat" id="wStat">Not connected</div>
+      <div class="wsub" id="wSub">Connect to the smoker over Bluetooth first.</div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="label">Nearby networks</div>
+        <button class="ghost small" id="wScan" disabled>Scan</button>
+      </div>
+      <div class="wlist" id="wList"></div>
+    </div>
+    <div class="card">
+      <label class="f"><span>Network name (SSID)</span>
+        <input type="text" id="wSsid" maxlength="32" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Pick one above or type it"></label>
+      <label class="f"><span>Password (leave empty for an open network)</span>
+        <input type="password" id="wPass" maxlength="63" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+      <label class="chk"><input type="checkbox" id="wShow"> Show password</label>
+      <div class="row">
+        <button id="wSave" disabled>Save &amp; connect</button>
+        <button id="wForget" class="ghost" disabled>Forget</button>
+      </div>
+      <p class="note" style="margin-top:12px">The network name and password are sent to the smoker over Bluetooth and stored on the ESP32. Use a 2.4 GHz network; the ESP32 can't join 5 GHz.</p>
+    </div>
+    <div class="card" id="wFw" style="display:none">
+      <div class="label">Firmware update</div>
+      <p class="note" style="margin:8px 0 12px">Opens the smoker's update page, where you upload a compiled <b>.bin</b>. Your phone must be on the same WiFi network as the smoker. It asks for the update username and password you set in the sketch.</p>
+      <a class="btnlink" id="wFwLink" target="_blank" rel="noopener">Open update page</a>
+      <p class="note" style="margin:10px 0 0" id="wFwAlt"></p>
+    </div>
+  </section>
+
+  <div class="card hint" id="unsupported"></div>
+</main>
+
+<nav>
+  <button data-s="dash" class="on">Dashboard</button>
+  <button data-s="targets">Targets</button>
+  <button data-s="fan">Fan</button>
+  <button data-s="wifi">WiFi</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ CONFIG: match these to your ESP32 firmware ============ */
+const SVC = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';   // SmokerController service
+const CH = {                                           // one characteristic per value (text)
+  pit: 'beb5483e-36e1-4688-b7f5-ea07361b26a1',        // notify: pit temp
+  m1:  'beb5483e-36e1-4688-b7f5-ea07361b26a2',        // notify: meat 1 temp
+  m2:  'beb5483e-36e1-4688-b7f5-ea07361b26a3',        // notify: meat 2 temp
+  set: 'beb5483e-36e1-4688-b7f5-ea07361b26a4',        // read/write: pit setpoint
+  fan: 'beb5483e-36e1-4688-b7f5-ea07361b26a5'         // notify: "ON" / "OFF"
+};
+const FAN_PWM = false;                                 // firmware cycles the fan on/off (no duty %)
+const SET_MIN = 100, SET_MAX = 400;                    // setpoint range the firmware accepts (°F)
+const WIFI_CH = {                                      // WiFi setup (needs the SmokerController_WiFi sketch)
+  cmd:  'beb5483e-36e1-4688-b7f5-ea07361b26a6',       // write: SCAN | SET\nssid\npass | FORGET
+  list: 'beb5483e-36e1-4688-b7f5-ea07361b26a7',       // notify: "rssi|secure|ssid" per network, then "END|n"
+  stat: 'beb5483e-36e1-4688-b7f5-ea07361b26a8'        // read/notify: "STATE|ip|ssid"
+};
+const NAME_PREFIX = 'Smoker';                          // BLE device name prefix
+const DEVICE_UNIT = 'F';                               // unit the ESP32 sends and expects
+const GAUGE_MAX = 500;                                 // gauge range in device units (min is 0)
+const MAX_POINTS = 10800;                              // ~3h at 1 point/sec; oldest dropped
+/* ==================================================================== */
+
+const $ = id => document.getElementById(id);
+const state = {                // Session State
+  pit_temp:null, meat1_temp:null, meat2_temp:null, fan_duty:0, status:'idle'
+};
+const config = {               // Configuration (device units)
+  target_pit:null, target_meat1:null, target_meat2:null, alert_pattern:'pulse'
+};
+let unit = 'F', band = 25, mode = 'auto';
+let points = [], sessionStart = Date.now(), lastPush = 0;
+
+/* ---------- unit helpers ---------- */
+const toDisp = v => v==null ? null : (unit===DEVICE_UNIT ? v : (DEVICE_UNIT==='F' ? (v-32)*5/9 : v*9/5+32));
+const toDev  = v => v==null ? null : (unit===DEVICE_UNIT ? v : (DEVICE_UNIT==='F' ? v*9/5+32 : (v-32)*5/9));
+const fmt = v => v==null ? '--' : Math.round(toDisp(v));
+
+/* ---------- toast / nav ---------- */
+let toastT;
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2800); }
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id==='s-'+b.dataset.s));
+  if(b.dataset.s==='dash') draw();
+});
+
+/* ---------- connection state ---------- */
+let conn = 'idle'; // idle | connecting | connected | reconnecting | demo
+function setConn(c){
+  conn = c;
+  const map = {idle:'Disconnected',connecting:'Connecting…',connected:'Connected',reconnecting:'Reconnecting…',demo:'Demo'};
+  $('dot').className = 'dot ' + c;
+  $('connText').textContent = map[c];
+  $('connBtn').textContent = (c==='connected'||c==='reconnecting'||c==='connecting') ? 'Disconnect' : 'Connect';
+  renderBanner();
+  wifiRender();
+}
+
+/* ---------- Web Bluetooth ---------- */
+let device=null, chars={}, retries=0, userDisc=false, rtimer=null, pollT=null, sendQ=Promise.resolve();
+const dec = new TextDecoder(), enc = new TextEncoder();
+
+async function connectBtn(ev, all){
+  if(conn==='connected'||conn==='reconnecting'||conn==='connecting'){ disconnect(); return; }
+  if(!navigator.bluetooth){
+    const u=$('unsupported'); u.style.display='block';
+    u.innerHTML='<b>Web Bluetooth isn\'t available in this browser.</b><br><span class="note">Use Chrome on Android (over HTTPS), or on iPhone use a Web Bluetooth browser such as Bluefy. Demo mode works anywhere.</span>';
+    return;
+  }
+  unlockAudio(); stopDemo();
+  if('Notification' in window && Notification.permission==='default') Notification.requestPermission();
+  try{
+    device = await navigator.bluetooth.requestDevice(all
+      ? {acceptAllDevices:true, optionalServices:[SVC]}
+      : {filters:[{services:[SVC]},{namePrefix:NAME_PREFIX}], optionalServices:[SVC]});
+  }catch(e){ if(e.name!=='NotFoundError') toast(e.message); return; }
+  userDisc=false; retries=0;
+  device.addEventListener('gattserverdisconnected', onDisc);
+  openLink();
+}
+async function openLink(){
+  setConn(retries? 'reconnecting':'connecting');
+  try{
+    const server = await device.gatt.connect();
+    const svc = await server.getPrimaryService(SVC);
+    for(const k in CH) chars[k] = await svc.getCharacteristic(CH[k]);
+    for(const k of ['pit','m1','m2','fan']){
+      chars[k].addEventListener('characteristicvaluechanged', ev=>onValue(k, dec.decode(ev.target.value)));
+      await chars[k].startNotifications();
+    }
+    retries=0; setConn('connected'); setStatus('Connected to '+(device.name||'smoker'));
+    keepAwake();
+    await wifiInit(svc);                        // optional: only present on the WiFi-enabled firmware
+    await readSetpoint();                       // the smoker is the source of truth for the setpoint
+    clearInterval(pollT); pollT=setInterval(readSetpoint, 2500);   // catches changes made with the smoker's buttons
+  }catch(e){ setStatus('Connect failed: '+(e.message||e.name)+' (retrying)'); scheduleReconnect(); }
+}
+function onDisc(){
+  clearInterval(pollT); chars={};
+  wifiOK=false; wScanning=false; wifiRender();
+  if(userDisc){ setConn('idle'); return; }
+  points.push({t:Date.now(),pit:null,m1:null,m2:null}); // gap in chart
+  setConn('reconnecting'); scheduleReconnect();
+}
+function scheduleReconnect(){
+  if(userDisc) return;
+  setConn('reconnecting');
+  clearTimeout(rtimer);
+  const delay = Math.min(1000*Math.pow(2,retries++), 8000);
+  rtimer = setTimeout(()=>{ if(!userDisc) openLink(); }, delay);
+}
+function disconnect(){
+  userDisc=true; clearTimeout(rtimer); clearInterval(pollT);
+  try{ if(device && device.gatt.connected) device.gatt.disconnect(); }catch(e){}
+  setConn('idle'); setStatus('Disconnected.');
+}
+/* Each notification is plain text, e.g. " 225.5" or "nan" (open thermocouple) or "ON"/"OFF" for the fan */
+function onValue(k, txt){
+  txt = (txt||'').replace(/\0/g,'').trim();
+  if(k==='fan'){
+    const on = /^on$/i.test(txt) || txt==='1';
+    state.fan_text = on ? 'ON' : 'OFF'; state.fan_duty = on ? 100 : 0;
+  } else {
+    const n = parseFloat(txt);
+    const v = (isFinite(n) && n>-100 && n<2000) ? n : null;   // nan / garbage -> sensor error
+    if(k==='pit') state.pit_temp = v; else if(k==='m1') state.meat1_temp = v; else state.meat2_temp = v;
+  }
+  state.status = 'ok';
+  ingest(state);
+}
+async function readSetpoint(){
+  if(!chars.set || spTimer) return;            // don't fight an adjustment in progress
+  try{
+    const n = parseFloat(dec.decode(await chars.set.readValue()));
+    if(isFinite(n) && n>=SET_MIN && n<=SET_MAX && config.target_pit!==n){
+      config.target_pit = n; pitSettled=false; clear('pit');
+      $('tPit').value = Math.round(toDisp(n)); render();
+    }
+  }catch(e){}
+}
+/* This firmware only accepts a pit setpoint (as text). Meat targets and alert patterns live in the app. */
+function sendCmd(obj){
+  if(conn!=='connected' || !chars.set) return false;
+  if(obj.c==='cfg' && obj.pit!=null){
+    const bytes = enc.encode(String(Math.round(Math.max(SET_MIN,Math.min(SET_MAX,obj.pit)))));
+    sendQ = sendQ.then(async()=>{ try{ await chars.set.writeValue(bytes); }catch(e){ setStatus('Setpoint write failed: '+(e.message||e.name)); } });
+    return true;
+  }
+  return false;
+}
+
+/* ---------- data in ---------- */
+function ingest(s){
+  Object.assign(state, s);
+  const now = Date.now();
+  if(now - lastPush >= 900){
+    lastPush = now;
+    points.push({t:now, pit:s.pit_temp, m1:s.meat1_temp, m2:s.meat2_temp});
+    if(points.length>MAX_POINTS) points.splice(0, 600);
+  }
+  render(); checkAlerts();
+}
+
+/* ---------- render ---------- */
+function setStatus(t){ $('status').textContent=t; }
+const tick = $('tick');
+function render(){
+  const p = state.pit_temp;
+  $('pitBig').textContent = p==null ? '--' : fmt(p)+'°';
+  $('pitBig').style.color = p==null ? 'var(--danger)' : '';
+  const tp = config.target_pit;
+  $('pitSub').textContent = p==null && conn!=='idle' ? 'Pit sensor error' : ('Target ' + (tp==null?'--':fmt(tp)+'°'+unit));
+  $('arc').setAttribute('stroke-dasharray', (p==null?0:Math.max(0,Math.min(100,p/GAUGE_MAX*100)))+' 100');
+  if(tp!=null){
+    const a = Math.PI*(1 - Math.min(1,tp/GAUGE_MAX)), cx=100, cy=105;
+    tick.setAttribute('x1',cx+66*Math.cos(a)); tick.setAttribute('y1',cy-66*Math.sin(a));
+    tick.setAttribute('x2',cx+94*Math.cos(a)); tick.setAttribute('y2',cy-94*Math.sin(a)); tick.setAttribute('opacity','1');
+  } else tick.setAttribute('opacity','0');
+  probe('m1', state.meat1_temp, config.target_meat1);
+  probe('m2', state.meat2_temp, config.target_meat2);
+  const fd = Math.max(0,Math.min(100,Math.round(state.fan_duty||0)));
+  $('fanV').textContent = fd;
+  const onoff = !FAN_PWM;
+  $('fanDash').textContent = onoff ? (state.fan_text || '--') : fd;
+  $('fanPct').style.display = onoff ? 'none' : '';
+  $('fanBar').style.width = fd+'%';
+  $('fanMode').textContent = onoff ? 'Auto cycling' : (mode==='manual' ? 'Manual' : 'Auto');
+  $('spV').textContent = tp==null ? '--' : fmt(tp)+'°';
+  if(mode==='auto') $('fan').value = state.fan_duty||0;
+  if(conn==='connected') setStatus('Last update '+new Date().toLocaleTimeString()+(state.status&&state.status!=='ok'?' · '+state.status:''));
+  draw();
+}
+function probe(k,v,t){
+  const c=$(k+'card'), e=$(k+'v');
+  const bad = v==null && conn!=='idle';
+  c.classList.toggle('err',bad);
+  e.textContent = v==null ? (bad?'No sensor':'--') : fmt(v)+'°';
+  $(k+'t').textContent = 'Target ' + (t==null?'--':fmt(t)+'°'+unit);
+  c.classList.toggle('hit', v!=null && t!=null && v>=t);
+}
+
+/* ---------- chart (canvas, bounded memory) ---------- */
+const cv = $('chart'), cx = cv.getContext('2d');
+let drawQueued=false;
+function draw(){ if(drawQueued) return; drawQueued=true; requestAnimationFrame(()=>{drawQueued=false; paint();}); }
+function css(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function paint(){
+  const dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight;
+  if(!w) return;
+  if(cv.width!==w*dpr||cv.height!==h*dpr){cv.width=w*dpr;cv.height=h*dpr;}
+  cx.setTransform(dpr,0,0,dpr,0,0); cx.clearRect(0,0,w,h);
+  const padL=34,padB=18,padT=6,padR=6, W=w-padL-padR, H=h-padT-padB;
+  const vals=[]; points.forEach(q=>{[q.pit,q.m1,q.m2].forEach(v=>{if(v!=null)vals.push(toDisp(v));});});
+  [config.target_pit].forEach(v=>{if(v!=null)vals.push(toDisp(v));});
+  let lo=vals.length?Math.min(...vals):60, hi=vals.length?Math.max(...vals):250;
+  lo=Math.floor((lo-10)/10)*10; hi=Math.ceil((hi+10)/10)*10; if(hi-lo<40)hi=lo+40;
+  const t0=points.length?points[0].t:Date.now(), t1=Math.max(points.length?points[points.length-1].t:t0, t0+60000);
+  const X=t=>padL+(t-t0)/(t1-t0)*W, Y=v=>padT+(1-(v-lo)/(hi-lo))*H;
+  cx.font='11px system-ui'; cx.fillStyle=css('--mute'); cx.strokeStyle=css('--line'); cx.lineWidth=1;
+  for(let i=0;i<=4;i++){const v=lo+(hi-lo)*i/4,y=Y(v);cx.beginPath();cx.moveTo(padL,y);cx.lineTo(w-padR,y);cx.stroke();cx.fillText(Math.round(v),2,y+4);}
+  const span=(t1-t0)/1000; cx.fillText(Math.floor(span/60)+'m',w-padR-26,h-4);
+  if(config.target_pit!=null){cx.setLineDash([5,4]);cx.strokeStyle=css('--active');cx.globalAlpha=.6;const y=Y(toDisp(config.target_pit));cx.beginPath();cx.moveTo(padL,y);cx.lineTo(w-padR,y);cx.stroke();cx.setLineDash([]);cx.globalAlpha=1;}
+  [['pit','--active',2.5],['m1','--m1',2],['m2','--m2',2]].forEach(([k,c,lw])=>{
+    cx.strokeStyle=css(c);cx.lineWidth=lw;cx.lineJoin='round';cx.beginPath();let pen=false;
+    // skip points to keep at most ~2 per pixel
+    const step=Math.max(1,Math.floor(points.length/(W*2)));
+    for(let i=0;i<points.length;i+=step){const q=points[i],v=q[k];
+      if(v==null){pen=false;continue;}
+      const x=X(q.t),y=Y(toDisp(v)); if(pen)cx.lineTo(x,y); else{cx.moveTo(x,y);pen=true;}
+    }
+    cx.stroke();
+  });
+}
+window.addEventListener('resize',draw);
+setInterval(()=>{ const s=Math.floor((Date.now()-sessionStart)/1000); $('elapsed').textContent=Math.floor(s/3600)+':'+String(Math.floor(s/60)%60).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); },1000);
+$('resetBtn').onclick=()=>{ points=[]; sessionStart=Date.now(); lastPush=0; draw(); toast('New session started'); };
+
+/* ---------- targets & config ---------- */
+function readTargets(){
+  const g=id=>{const v=parseFloat($(id).value);return isFinite(v)?toDev(v):null;};
+  config.target_pit=g('tPit'); config.target_meat1=g('tM1'); config.target_meat2=g('tM2');
+  config.alert_pattern=$('pattern').value; band=parseFloat($('band').value)||25;
+}
+function pushConfig(silent){
+  const ok = sendCmd({c:'cfg',pit:config.target_pit,m1:config.target_meat1,m2:config.target_meat2,pat:config.alert_pattern});
+  if(!silent) toast(ok?'Sent to smoker':'Saved in app (not connected)');
+}
+$('applyBtn').onclick=()=>{ readTargets(); resetAlertState(); pushConfig(); render(); };
+['tPit','tM1','tM2','pattern','band'].forEach(id=>$(id).addEventListener('change',()=>{readTargets();render();}));
+$('testBtn').onclick=()=>{ unlockAudio(); readTargets(); raise('test','Test alert'); };
+$('unitSeg').onclick=e=>{ const u=e.target.dataset.u; if(!u||u===unit) return;
+  // convert displayed inputs
+  ['tPit','tM1','tM2'].forEach(id=>{const el=$(id);const dv=parseFloat(el.value);if(isFinite(dv)){const d=toDev(dv);unit=u;el.value=Math.round(toDisp(d));unit=(u==='F'?'C':'F');}});
+  unit=u; band=Math.round(band*(u==='C'?5/9:9/5)); $('band').value=band;
+  document.querySelectorAll('#unitSeg button').forEach(b=>b.classList.toggle('on',b.dataset.u===u)); render(); };
+
+/* ---------- fan ---------- */
+$('modeSeg').onclick=e=>{ const m=e.target.dataset.m; if(!m) return; mode=m;
+  document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+  $('fan').disabled = (m!=='manual');
+  $('fanNote').textContent = m==='manual' ? 'Manual: the smoker holds this duty until you change it.' : 'Auto: the smoker controls the fan.';
+  sendCmd({c:'fan',mode:m,duty:Math.round(+$('fan').value)}); render();
+  if(m==='manual') $('fan').value=state.fan_duty||0, $('fanV').textContent=Math.round(state.fan_duty||0);
+};
+let fanT=0;
+$('fan').addEventListener('input',e=>{ $('fanV').textContent=e.target.value; state.fan_duty=+e.target.value; render(); const n=Date.now(); if(n-fanT>250){fanT=n;sendCmd({c:'fan',mode:'manual',duty:+e.target.value});} });
+$('fan').addEventListener('change',e=>sendCmd({c:'fan',mode:'manual',duty:+e.target.value}));
+$('silenceBtn').onclick=()=>{ ackAll(); sendCmd({c:'silence'}); toast('Alarm silenced'); };
+
+/* ---------- alerts ---------- */
+const active = {};        // key -> {msg, acked}
+let pitSettled=false, loopT=null, ac=null;
+function resetAlertState(){ for(const k in active) delete active[k]; pitSettled=false; stopLoop(); renderBanner(); }
+function raise(k,msg){ if(!active[k]){ active[k]={msg,acked:false}; notify(msg); startLoop(); renderBanner(); } }
+function clear(k){ if(active[k]){ delete active[k]; if(!Object.values(active).some(a=>!a.acked)) stopLoop(); renderBanner(); } }
+function checkAlerts(){
+  const {pit_temp:p, meat1_temp:a, meat2_temp:b}=state;
+  if(config.target_meat1!=null && a!=null && a>=config.target_meat1) raise('m1','Meat 1 reached '+fmt(config.target_meat1)+'°'); else clear('m1');
+  if(config.target_meat2!=null && b!=null && b>=config.target_meat2) raise('m2','Meat 2 reached '+fmt(config.target_meat2)+'°'); else clear('m2');
+  if(config.target_pit!=null && p!=null){
+    const d=Math.abs(p-config.target_pit), bd = unit===DEVICE_UNIT?band:toDev(band)-toDev(0);
+    if(d<=Math.abs(bd)) pitSettled=true;
+    if(pitSettled && d>Math.abs(bd)) raise('pit', p>config.target_pit?'Pit running hot: '+fmt(p)+'°':'Pit running cold: '+fmt(p)+'°'); else clear('pit');
+  }
+  if(state.status==='alarm') raise('hw','Smoker alarm'); else clear('hw');
+}
+function ackAll(){ for(const k in active) active[k].acked=true; stopLoop(); renderBanner(); }
+function renderBanner(){
+  const b=$('banner'); const open=Object.values(active).filter(a=>!a.acked);
+  if(open.length){ b.className='banner show alarm'; b.innerHTML='<span>'+open.map(a=>a.msg).join(' · ')+'</span><button class="small" style="background:#fff;color:#b52b2b" id="ackBtn">Silence</button>'; $('ackBtn').onclick=()=>{ackAll();sendCmd({c:'silence'});}; }
+  else if(conn==='reconnecting'){ b.className='banner show info'; b.textContent='Reconnecting to smoker…'; }
+  else b.className='banner';
+}
+function notify(msg){ try{ if('Notification' in window && Notification.permission==='granted' && document.hidden) new Notification('Smoker Monitor',{body:msg}); }catch(e){} }
+function unlockAudio(){ try{ ac = ac || new (window.AudioContext||window.webkitAudioContext)(); if(ac.state==='suspended') ac.resume(); }catch(e){} }
+function beep(ms,delay=0){ if(!ac) return; const o=ac.createOscillator(),g=ac.createGain(); o.frequency.value=1000; g.gain.value=.25; o.connect(g);g.connect(ac.destination); const t=ac.currentTime+delay/1000; o.start(t); o.stop(t+ms/1000); }
+function playPattern(){
+  const p=config.alert_pattern;
+  if(p==='continuous'){ beep(1200); navigator.vibrate&&navigator.vibrate(1200); }
+  else if(p==='double'){ beep(120); beep(120,220); navigator.vibrate&&navigator.vibrate([120,100,120]); }
+  else { beep(220); navigator.vibrate&&navigator.vibrate(220); }
+}
+function startLoop(){ if(loopT) return; playPattern(); loopT=setInterval(playPattern, config.alert_pattern==='continuous'?1500:1200); }
+function stopLoop(){ clearInterval(loopT); loopT=null; navigator.vibrate&&navigator.vibrate(0); }
+
+/* ---------- keep screen awake ---------- */
+let wl=null;
+async function keepAwake(){ try{ if('wakeLock' in navigator) wl = await navigator.wakeLock.request('screen'); }catch(e){} }
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden && (conn==='connected'||conn==='demo')) keepAwake(); });
+
+/* ---------- demo mode ---------- */
+let demoT=null, dm={pit:150,m1:60,m2:62,t:0};
+function startDemo(){
+  if(conn==='connected'||conn==='reconnecting') disconnect();
+  unlockAudio(); setConn('demo'); setStatus('Demo mode: simulated data.'); keepAwake();
+  if(config.target_pit==null){ $('tPit').value=225; $('tM1').value=165; $('tM2').value=170; readTargets(); }
+  dm={pit:150,m1:60,m2:62,t:0};
+  demoT=setInterval(()=>{
+    dm.t++; dm.pit+= (config.target_pit-dm.pit)*0.04 + (Math.random()-.5)*2.5;
+    dm.m1+= .25+Math.random()*.25; dm.m2+= .2+Math.random()*.25;
+    ingest({pit_temp:dm.pit, meat1_temp:dm.m1, meat2_temp: dm.t%40>34 ? null : dm.m2, fan_duty:Math.max(0,Math.min(100,(config.target_pit-dm.pit)*3+30)), fan_text:((config.target_pit-dm.pit)*3+30)>50?'ON':'OFF', status:'ok'});
+  },1000);
+}
+function stopDemo(){ if(demoT){ clearInterval(demoT); demoT=null; if(conn==='demo') setConn('idle'); } }
+$('demoBtn').onclick=()=>{ demoT?stopDemo():startDemo(); $('demoBtn').textContent = demoT?'Stop demo':'Demo mode'; };
+
+/* ---------- quick pit setpoint adjust ---------- */
+let spTimer=null;
+function nudgeSetpoint(dir){
+  unlockAudio();
+  const F = unit==='F', step = F?5:2, lo = F?SET_MIN:38, hi = F?SET_MAX:204;
+  let cur = config.target_pit!=null ? toDisp(config.target_pit) : (F?225:107);
+  const next = Math.max(lo, Math.min(hi, Math.round(cur/step)*step + dir*step));
+  config.target_pit = toDev(next);
+  $('tPit').value = next;
+  pitSettled=false; clear('pit');          // don't alarm while the pit moves to the new setpoint
+  $('spHint').textContent = 'Sending…';
+  render();
+  clearTimeout(spTimer);
+  spTimer=setTimeout(()=>{
+    spTimer=null;
+    const ok = sendCmd({c:'cfg',pit:config.target_pit,m1:config.target_meat1,m2:config.target_meat2,pat:config.alert_pattern});
+    $('spHint').textContent = ok ? 'Sent to smoker' : (conn==='demo' ? 'Demo setpoint' : 'Saved (not connected)');
+  },600);
+}
+function holdRepeat(btn,dir){
+  let t=null,r=null;
+  const stop=()=>{clearTimeout(t);clearInterval(r);};
+  btn.addEventListener('pointerdown',e=>{e.preventDefault();nudgeSetpoint(dir);t=setTimeout(()=>{r=setInterval(()=>nudgeSetpoint(dir),150);},450);});
+  ['pointerup','pointerleave','pointercancel'].forEach(ev=>btn.addEventListener(ev,stop));
+}
+holdRepeat($('spDn'),-1); holdRepeat($('spUp'),1);
+
+$('connBtn').onclick=connectBtn;
+$('allBtn').onclick=()=>connectBtn(null,true);
+if(!FAN_PWM){
+  $('modeSeg').parentElement.style.display='none';
+  $('fan').style.display='none';
+  document.querySelector('#s-fan .fanval').style.display='none';
+  $('fanNote').textContent = "Your smoker cycles the fan on and off by itself. Manual duty control isn't available with this firmware.";
+}
+/* ---------- WiFi setup (over BLE) ---------- */
+let wifiOK=false, wNets=[], wScanning=false, wScanT=null, wStat={st:'',ip:'',ssid:''};
+
+async function wifiInit(svc){
+  wifiOK=false; wNets=[]; wScanning=false; wStat={st:'',ip:'',ssid:''};
+  try{
+    chars.wcmd  = await svc.getCharacteristic(WIFI_CH.cmd);
+    chars.wlist = await svc.getCharacteristic(WIFI_CH.list);
+    chars.wstat = await svc.getCharacteristic(WIFI_CH.stat);
+    chars.wlist.addEventListener('characteristicvaluechanged', ev=>onWifiList(dec.decode(ev.target.value)));
+    chars.wstat.addEventListener('characteristicvaluechanged', ev=>onWifiStat(dec.decode(ev.target.value)));
+    await chars.wlist.startNotifications();
+    await chars.wstat.startNotifications();
+    wifiOK=true;
+    try{ onWifiStat(dec.decode(await chars.wstat.readValue())); }catch(e){}
+  }catch(e){ wifiOK=false; }       // older firmware: no WiFi characteristics
+  wifiRender();
+}
+async function wifiSend(text){
+  if(!wifiOK || conn!=='connected'){ toast('Connect to the smoker first'); return false; }
+  try{ await chars.wcmd.writeValue(enc.encode(text)); return true; }
+  catch(e){ toast('WiFi command failed: '+(e.message||e.name)); return false; }
+}
+function onWifiStat(t){
+  const a = t.replace(/\0/g,'').trim().split('|');
+  wStat = {st:a[0]||'', ip:a[1]||'', ssid:a.slice(2).join('|')};
+  wifiRender();
+}
+function onWifiList(t){
+  t = t.replace(/\0/g,'').replace(/[\r\n]+$/,'');
+  if(!t) return;
+  if(t.startsWith('END')){ wScanning=false; clearTimeout(wScanT); wifiRenderList(); return; }
+  if(t.startsWith('ERR')){ wScanning=false; clearTimeout(wScanT); toast(t.indexOf('busy')>0?'Smoker is busy connecting. Try again in a moment.':'Scan failed'); wifiRenderList(); return; }
+  const a = t.split('|'); if(a.length<3) return;
+  const rssi = parseInt(a[0],10), secure = a[1]==='1', ssid = a.slice(2).join('|');
+  if(!ssid) return;
+  const ex = wNets.find(n=>n.ssid===ssid);
+  if(ex){ if(rssi>ex.rssi) ex.rssi=rssi; } else wNets.push({ssid,rssi,secure});
+  wNets.sort((x,y)=>y.rssi-x.rssi);
+  wifiRenderList();
+}
+const wBars = r => r>=-55?'▂▄▆█' : r>=-67?'▂▄▆' : r>=-78?'▂▄' : '▂';
+function wifiRenderList(){
+  const el=$('wList'); el.textContent='';
+  const live = wifiOK && conn==='connected';
+  if(!live) return;
+  wNets.forEach(n=>{
+    const b=document.createElement('button'); b.type='button';
+    b.className='wnet'+($('wSsid').value===n.ssid?' on':'');
+    const s=document.createElement('span'); s.className='wn'; s.textContent=n.ssid;      // textContent: SSIDs are untrusted
+    const m=document.createElement('span'); m.className='wm'; m.textContent=(n.secure?'🔒 ':'')+wBars(n.rssi);
+    b.append(s,m);
+    b.onclick=()=>{ $('wSsid').value=n.ssid; $('wPass').value=''; wifiRenderList(); $('wPass').focus(); };
+    el.appendChild(b);
+  });
+  if(wScanning || !wNets.length){
+    const d=document.createElement('div'); d.className='note';
+    d.textContent = wScanning ? 'Scanning… this takes a few seconds.' : 'Tap Scan to search from the smoker.';
+    el.appendChild(d);
+  }
+}
+function wifiRender(){
+  const st=$('wStat'), sub=$('wSub'), live = wifiOK && conn==='connected';
+  ['wScan','wSave','wForget'].forEach(id=>$(id).disabled=!live);
+  st.className='wstat';
+  $('wFw').style.display='none';
+  if(!live){
+    if(conn==='connected'){ st.textContent='Not supported by this firmware'; st.classList.add('warn'); sub.textContent='Upload the SmokerController_WiFi sketch to the ESP32, then reconnect.'; }
+    else { st.textContent='Not connected'; sub.textContent='Connect to the smoker over Bluetooth first.'; }
+    wifiRenderList(); return;
+  }
+  const {st:s, ip, ssid} = wStat;
+  if(s==='CONNECTED'){
+    st.textContent='Connected'; st.classList.add('ok'); sub.textContent=ssid+' · '+ip;
+    if(/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)){                  // only link to a well-formed IPv4 address
+      $('wFwLink').href='http://'+ip+'/';
+      $('wFwAlt').textContent='Or type http://'+ip+'/ (or http://smoker.local/) into your browser.';
+      $('wFw').style.display='';
+    }
+  }
+  else if(s==='CONNECTING'){ st.textContent='Connecting…'; st.classList.add('warn'); sub.textContent=ssid; }
+  else if(s==='FAILED'){ st.textContent='Could not connect'; st.classList.add('bad'); sub.textContent=(ssid||'')+': check the password and signal.'; }
+  else if(s==='DISCONNECTED'){ st.textContent='Saved, not connected'; st.classList.add('warn'); sub.textContent=ssid+': out of range or off. It reconnects by itself.'; }
+  else { st.textContent='No network saved'; sub.textContent='Scan or type a network below.'; }
+  if(ssid && !$('wSsid').value) $('wSsid').value = ssid;
+  wifiRenderList();
+}
+$('wScan').onclick = async ()=>{
+  wNets=[]; wScanning=true; wifiRenderList();
+  if(await wifiSend('SCAN')){ clearTimeout(wScanT); wScanT=setTimeout(()=>{ wScanning=false; wifiRenderList(); },15000); }
+  else { wScanning=false; wifiRenderList(); }
+};
+$('wSave').onclick = async ()=>{
+  const ssid=$('wSsid').value, pass=$('wPass').value;
+  if(!ssid){ toast('Pick or type a network name'); return; }
+  if(enc.encode(ssid).length>32){ toast('Network names are at most 32 characters'); return; }
+  if(pass && (pass.length<8 || pass.length>63)){ toast('WPA passwords are 8 to 63 characters'); return; }
+  if(/[\r\n]/.test(ssid+pass)){ toast('Line breaks aren\'t allowed'); return; }
+  if(await wifiSend('SET\n'+ssid+'\n'+pass)){
+    toast('Sent. The smoker is connecting…');
+    $('wPass').value=''; wStat={st:'CONNECTING',ip:'',ssid}; wifiRender();
+  }
+};
+$('wForget').onclick = async ()=>{
+  if(!confirm('Forget the saved WiFi network on the smoker?')) return;
+  if(await wifiSend('FORGET')){ $('wSsid').value=''; $('wPass').value=''; wStat={st:'NONE',ip:'',ssid:''}; wifiRender(); toast('WiFi forgotten'); }
+};
+$('wShow').onchange = e=>{ $('wPass').type = e.target.checked ? 'text' : 'password'; };
+$('wSsid').addEventListener('input', wifiRenderList);
+
+if('serviceWorker' in navigator && location.protocol==='https:'){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+setConn('idle'); render();
+</script>
+</body>
+</html>
