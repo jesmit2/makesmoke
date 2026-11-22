@@ -11,6 +11,9 @@
   - NEW: over-the-air firmware updates. Once the smoker is on WiFi, open
          http://<its IP>/  (or http://smoker.local/) and upload a compiled .bin.
 
+  Too big for your board? Set ENABLE_OTA to 0 (saves ~100+ KB), or ENABLE_WIFI to 0
+  for a Bluetooth-only build (smallest). The app copes with either.
+
   Arduino IDE: Tools > Partition Scheme > "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)"
   (BLE + WiFi are too big for the default partition, and OTA needs two app slots,
    so do NOT use "Huge APP". Changing the partition scheme requires one USB upload.)
@@ -28,11 +31,23 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
-#include <WiFi.h>
-#include <Preferences.h>
-#include <WebServer.h>
-#include <Update.h>
-#include <ESPmDNS.h>
+// ---------------- Build options: turn features off to make the sketch smaller ----------------
+#define ENABLE_WIFI 1   // 1 = WiFi setup from the app.  0 = Bluetooth only (smallest; also removes OTA)
+#define ENABLE_OTA  1   // 1 = firmware update page over WiFi.  0 = saves roughly 100+ KB
+#if !ENABLE_WIFI
+  #undef  ENABLE_OTA
+  #define ENABLE_OTA 0
+#endif
+
+#if ENABLE_WIFI
+  #include <WiFi.h>
+  #include <Preferences.h>
+#endif
+#if ENABLE_OTA
+  #include <WebServer.h>
+  #include <Update.h>
+  #include <ESPmDNS.h>
+#endif
 
 // ---------------- Pins (ESP32 DevKit) ----------------
 const int PIN_UP     = 32;
@@ -98,6 +113,7 @@ BLECharacteristic *pWifiStatChar;
 
 bool deviceConnected = false;
 
+#if ENABLE_WIFI
 // ---------------- WiFi state ----------------
 Preferences prefs;
 
@@ -116,6 +132,7 @@ unsigned long wifiConnectStart = 0;
 const unsigned long WIFI_TIMEOUT_MS = 20000;
 String lastStatSent = "";
 
+#if ENABLE_OTA
 // ---------------- Firmware update (OTA) ----------------
 const char *FW_VERSION = "1.1.0";        // bump this each time you build a new .bin
 const char *OTA_USER   = "smitty";
@@ -153,6 +170,9 @@ b.onclick=()=>{
 };
 </script></body></html>)rawliteral";
 
+#endif  // ENABLE_OTA
+#endif  // ENABLE_WIFI
+
 // ---------------- Thermistor settings ----------------
 const float SERIES_RESISTOR     = 10000.0;
 const float THERMISTOR_NOMINAL  = 10000.0;
@@ -189,6 +209,7 @@ class SetpointCallbacks : public BLECharacteristicCallbacks {
   }
 };
 
+#if ENABLE_WIFI
 // Commands from the app. Only flags are set here; the real work happens in loop().
 class WifiCmdCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *pCharacteristic) {
@@ -213,6 +234,8 @@ class WifiCmdCallbacks : public BLECharacteristicCallbacks {
     }
   }
 };
+
+#endif  // ENABLE_WIFI
 
 // ---------------- Helper Functions ----------------
 float cToF(float c) {
@@ -376,6 +399,7 @@ void updateBLE() {
   pFanChar->notify();
 }
 
+#if ENABLE_WIFI
 // ---------------- WiFi helpers ----------------
 void startWifi() {
   WiFi.mode(WIFI_STA);
@@ -492,11 +516,14 @@ void wifiTask() {
     wifiState = WS_CONNECTED;
   }
 
+#if ENABLE_OTA
   if (wifiState == WS_CONNECTED) startWebServer();
+#endif
 
   updateWifiStatus();
 }
 
+#if ENABLE_OTA
 // ---------------- Web server for firmware updates ----------------
 void handleRoot() {
   if (!server.authenticate(OTA_USER, OTA_PASS)) return server.requestAuthentication();
@@ -546,6 +573,9 @@ void startWebServer() {
   Serial.println("Update page ready at http://" + WiFi.localIP().toString() + "/");
 }
 
+#endif  // ENABLE_OTA
+#endif  // ENABLE_WIFI
+
 // ---------------- Setup ----------------
 void setup() {
   Serial.begin(115200);
@@ -573,26 +603,34 @@ void setup() {
   BLEServer *pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
 
-  BLEService *pService = pServer->createService(SERVICE_UUID);
+  // 30 handles: the default of 15 only fits the original five characteristics, so the three
+  // WiFi ones were silently dropped and the app saw "Not supported by this firmware".
+  BLEService *pService = pServer->createService(BLEUUID(SERVICE_UUID), 30, 0);
 
   pPitChar      = pService->createCharacteristic(CHAR_PIT_UUID,      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
   pMeat1Char    = pService->createCharacteristic(CHAR_MEAT1_UUID,    BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
   pMeat2Char    = pService->createCharacteristic(CHAR_MEAT2_UUID,    BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
   pSetpointChar = pService->createCharacteristic(CHAR_SETPOINT_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE);
   pFanChar      = pService->createCharacteristic(CHAR_FAN_UUID,      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+#if ENABLE_WIFI
   pWifiCmdChar  = pService->createCharacteristic(CHAR_WIFI_CMD_UUID,  BLECharacteristic::PROPERTY_WRITE);
   pWifiListChar = pService->createCharacteristic(CHAR_WIFI_LIST_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
   pWifiStatChar = pService->createCharacteristic(CHAR_WIFI_STAT_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+#endif
 
   pSetpointChar->setCallbacks(new SetpointCallbacks());
+#if ENABLE_WIFI
   pWifiCmdChar->setCallbacks(new WifiCmdCallbacks());
+#endif
 
   pPitChar->addDescriptor(new BLE2902());
   pMeat1Char->addDescriptor(new BLE2902());
   pMeat2Char->addDescriptor(new BLE2902());
   pFanChar->addDescriptor(new BLE2902());
+#if ENABLE_WIFI
   pWifiListChar->addDescriptor(new BLE2902());
   pWifiStatChar->addDescriptor(new BLE2902());
+#endif
 
   pService->start();
 
@@ -605,6 +643,7 @@ void setup() {
 
   Serial.println("BLE advertising as --> SmokerController");
 
+#if ENABLE_WIFI
   // ---------- WiFi: reconnect to the saved network, if any ----------
   prefs.begin("wifi", false);
   wifiSsid = prefs.getString("ssid", "");
@@ -615,6 +654,7 @@ void setup() {
     startWifi();
   }
   updateWifiStatus();
+#endif
 
   delay(500);
 }
@@ -631,12 +671,19 @@ void loop() {
   checkAlarms();
   updateLCDs();
   updateBLE();
+#if ENABLE_WIFI
   wifiTask();
+#endif
 
+#if ENABLE_OTA
   // Wait ~400 ms, but keep answering web requests so the update page stays responsive
   unsigned long t0 = millis();
   while (millis() - t0 < 400) {
     if (webStarted) server.handleClient();
     delay(5);
   }
+#else
+  delay(400);
+#endif
 }
+
